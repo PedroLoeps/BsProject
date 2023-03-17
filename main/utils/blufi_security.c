@@ -59,7 +59,7 @@ extern void btc_blufi_report_error(esp_blufi_error_state_t state);
 
 void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **output_data, int *output_len, bool *need_free)
 {
-    int ret;
+    int err;
     uint8_t type = data[0];
 
     if (blufi_sec == NULL) {
@@ -90,9 +90,9 @@ void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **output_da
         }
         uint8_t *param = blufi_sec->dh_param;
         memcpy(blufi_sec->dh_param, &data[1], blufi_sec->dh_param_len);
-        ret = mbedtls_dhm_read_params(&blufi_sec->dhm, &param, &param[blufi_sec->dh_param_len]);
-        if (ret) {
-            BLUFI_ERROR("%s read param failed %d\n", __func__, ret);
+        err = mbedtls_dhm_read_params(&blufi_sec->dhm, &param, &param[blufi_sec->dh_param_len]);
+        if (err) {
+            BLUFI_ERROR("%s read param failed %d\n", __func__, err);
             btc_blufi_report_error(ESP_BLUFI_READ_PARAM_ERROR);
             return;
         }
@@ -100,28 +100,28 @@ void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **output_da
         blufi_sec->dh_param = NULL;
 
         const int dhm_len = mbedtls_dhm_get_len(&blufi_sec->dhm);
-        ret = mbedtls_dhm_make_public(&blufi_sec->dhm, dhm_len, blufi_sec->self_public_key, dhm_len, myrand, NULL);
-        if (ret) {
-            BLUFI_ERROR("%s make public failed %d\n", __func__, ret);
+        err = mbedtls_dhm_make_public(&blufi_sec->dhm, dhm_len, blufi_sec->self_public_key, dhm_len, myrand, NULL);
+        if (err) {
+            BLUFI_ERROR("%s make public failed %d\n", __func__, err);
             btc_blufi_report_error(ESP_BLUFI_MAKE_PUBLIC_ERROR);
             return;
         }
 
-        ret = mbedtls_dhm_calc_secret( &blufi_sec->dhm,
+        err = mbedtls_dhm_calc_secret( &blufi_sec->dhm,
                 blufi_sec->share_key,
                 SHARE_KEY_BIT_LEN,
                 &blufi_sec->share_len,
                 myrand, NULL);
-        if (ret) {
-            BLUFI_ERROR("%s mbedtls_dhm_calc_secret failed %d\n", __func__, ret);
+        if (err) {
+            BLUFI_ERROR("%s mbedtls_dhm_calc_secret failed %d\n", __func__, err);
             btc_blufi_report_error(ESP_BLUFI_DH_PARAM_ERROR);
             return;
         }
 
-        ret = mbedtls_md5(blufi_sec->share_key, blufi_sec->share_len, blufi_sec->psk);
+        err = mbedtls_md5(blufi_sec->share_key, blufi_sec->share_len, blufi_sec->psk);
 
-        if (ret) {
-            BLUFI_ERROR("%s mbedtls_md5 failed %d\n", __func__, ret);
+        if (err) {
+            BLUFI_ERROR("%s mbedtls_md5 failed %d\n", __func__, err);
             btc_blufi_report_error(ESP_BLUFI_CALC_MD5_ERROR);
             return;
         }
@@ -146,15 +146,15 @@ void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **output_da
 
 int blufi_aes_encrypt(uint8_t iv8, uint8_t *crypt_data, int crypt_len)
 {
-    int ret;
+    int err;
     size_t iv_offset = 0;
     uint8_t iv0[16];
 
     memcpy(iv0, blufi_sec->iv, sizeof(blufi_sec->iv));
     iv0[0] = iv8;   /* set iv8 as the iv0[0] */
 
-    ret = mbedtls_aes_crypt_cfb128(&blufi_sec->aes, MBEDTLS_AES_ENCRYPT, crypt_len, &iv_offset, iv0, crypt_data, crypt_data);
-    if (ret) {
+    err = mbedtls_aes_crypt_cfb128(&blufi_sec->aes, MBEDTLS_AES_ENCRYPT, crypt_len, &iv_offset, iv0, crypt_data, crypt_data);
+    if (err) {
         return -1;
     }
 
@@ -163,15 +163,15 @@ int blufi_aes_encrypt(uint8_t iv8, uint8_t *crypt_data, int crypt_len)
 
 int blufi_aes_decrypt(uint8_t iv8, uint8_t *crypt_data, int crypt_len)
 {
-    int ret;
+    int err;
     size_t iv_offset = 0;
     uint8_t iv0[16];
 
     memcpy(iv0, blufi_sec->iv, sizeof(blufi_sec->iv));
     iv0[0] = iv8;   /* set iv8 as the iv0[0] */
 
-    ret = mbedtls_aes_crypt_cfb128(&blufi_sec->aes, MBEDTLS_AES_DECRYPT, crypt_len, &iv_offset, iv0, crypt_data, crypt_data);
-    if (ret) {
+    err = mbedtls_aes_crypt_cfb128(&blufi_sec->aes, MBEDTLS_AES_DECRYPT, crypt_len, &iv_offset, iv0, crypt_data, crypt_data);
+    if (err) {
         return -1;
     }
 
