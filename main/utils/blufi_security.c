@@ -13,7 +13,7 @@
 #include "esp_bt.h"
 
 #include "esp_blufi_api.h"
-#include "blufi.h"
+#include "blufi_util.h"
 
 #include "mbedtls/aes.h"
 #include "mbedtls/dhm.h"

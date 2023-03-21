@@ -3,8 +3,9 @@
 
 
 #include "esp_blufi_api.h"
-#include "blufi.h"
-#include "wifi.h"
+#include "blufi_util.h"
+#include "wifi_util.h"
+#include "nvs_util.h"
 
 #include "esp_blufi.h"
 
@@ -12,13 +13,7 @@ void app_main(void)
 {
     esp_err_t err;
 
-    // Initialize NVS
-    err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err); //Understand what this does better but it is usefull--
+    ESP_ERROR_CHECK(nvs_init());
 
     initialise_wifi();
 
