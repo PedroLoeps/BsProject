@@ -4,5 +4,6 @@ idf_component_register(SRCS
                             "utils/blufi_security"
                             "utils/wifi_util.c"
                             "utils/nvs_util.c"
+                            "utils/mqtt_util.c"
 
                     INCLUDE_DIRS "utils")
