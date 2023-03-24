@@ -11,4 +11,6 @@
  * @param event_data The data for the event, esp_mqtt_event_handle_t.
  */
 
-void mqtt_app_start(void);
+void mqtt_client_init(void);
+
+void mqtt_send_data(const char * topic, const char * data);

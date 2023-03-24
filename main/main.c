@@ -7,6 +7,7 @@
 #include "wifi_util.h"
 #include "nvs_util.h"
 #include "mqtt_util.h"
+#include "sensor_util.h"
 
 #include "esp_blufi.h"
 
@@ -16,11 +17,6 @@ void app_main(void)
 
     ESP_ERROR_CHECK(nvs_init());
 
-    initialise_wifi();
-
-    mqtt_app_start();
-
-
     err = esp_blufi_host_and_cb_init();
     if (err) {
         BLUFI_ERROR("%s initialise failed: %s\n", __func__, esp_err_to_name(err));
@@ -28,4 +24,15 @@ void app_main(void)
     }
 
     BLUFI_INFO("BLUFI VERSION %04x\n", esp_blufi_get_version());
+
+    initialise_wifi();
+
+    mqtt_client_init();
+
+    sensor_init();
+    while(1)
+    {
+        sensor_read();
+    }
+    
 }
