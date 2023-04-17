@@ -1,4 +1,6 @@
 #pragma once
 
-void sensor_init(void);
-void sensor_read(void);
+
+void sensors_init(void);
+void sensors_read(int* temp, float* ph);
+bool hum_sensor_read();

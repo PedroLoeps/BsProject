@@ -23,9 +23,11 @@
 
 #define WIFI_LIST_NUM   10 //Is this used anywhere?
 
-extern struct wifi_info wifi_inf;
+struct wifi_info wifi_inf;
 
 extern wifi_config_t wifi_config;
+
+bool config_done;
 
 static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_t *param);
 
@@ -125,6 +127,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
         wifi_config.sta.password[param->sta_passwd.passwd_len] = '\0';
         esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
         BLUFI_INFO("Recv STA PASSWORD %s\n", wifi_config.sta.password);
+        config_done = true;//find better way to do this
         set_saved_wifi(&wifi_config);//find better place to do this
         break;
     case ESP_BLUFI_EVENT_GET_WIFI_LIST:{
@@ -280,6 +283,8 @@ static esp_err_t esp_blufi_gap_register_callback(void)
 
 esp_err_t esp_blufi_host_and_cb_init(void)
 {
+
+    config_done = false;
     esp_err_t err = ESP_OK;
 
     err = esp_blufi_register_callbacks(&blufi_callbacks);
