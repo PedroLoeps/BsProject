@@ -15,10 +15,6 @@ struct sensor_config
     int wb_reading;
     //Number of times the sensor has woken up before reading
     int current_wb_readings;
-
-    int *temp;
-
-    float *ph;
 };
 
 
@@ -28,3 +24,5 @@ esp_err_t set_saved_wifi(wifi_config_t* wifi_config);
 esp_err_t get_saved_wifi(wifi_config_t* wifi_config);
 esp_err_t set_saved_config(struct sensor_config* sensor);
 esp_err_t get_saved_config(struct sensor_config* sensor);
+esp_err_t set_saved_readings(int* temp, float* ph, int size);
+esp_err_t get_saved_readings(int* temp, float* ph);

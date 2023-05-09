@@ -50,14 +50,13 @@ void app_main(void)
     initialise_wifi();
     vTaskDelay(10000 / portTICK_PERIOD_MS);
 
-    mqtt_client_init();//Change this
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
 
     switch(esp_sleep_get_wakeup_cause()) 
     {
         case ESP_SLEEP_WAKEUP_TIMER:
             printf("Wake up from timer. Time spent in deep sleep: %dms\n", sleep_time_ms);
-            if(++sensor_conf.current_wb_readings == sensor_conf.wb_reading)
+            if(++(sensor_conf.current_wb_readings) >= sensor_conf.wb_reading)
             {
                 sensor_conf.current_wb_readings = 0;
                 perform_reading = true;
@@ -66,6 +65,7 @@ void app_main(void)
             bool humidity_detected = hum_sensor_read();
             if(humidity_detected)
             {
+                mqtt_client_init();//Change this
                 printf("Humidity Detected\n");
                 char alarm_message[20];
                 sprintf(alarm_message, "%x:%x:%x:%x:%x:%x 0",
@@ -81,9 +81,12 @@ void app_main(void)
             sensor_conf.current_wb_readings=0;
             sensor_conf.readings=4;
             sensor_conf.current_readings=0;
-            sensor_conf.temp = (int*)calloc(sensor_conf.readings,sizeof(int));
-            sensor_conf.ph = (float*)calloc(sensor_conf.readings,sizeof(float));
 
+            int *temp = (int*)calloc(sensor_conf.readings,sizeof(int));
+            float *ph = (float*)calloc(sensor_conf.readings,sizeof(float));
+
+            set_saved_readings(temp, ph, sensor_conf.readings);
+            
             esp_err_t err = esp_blufi_host_and_cb_init();
             if (err) 
             {
@@ -105,28 +108,53 @@ void app_main(void)
 
     if(perform_reading)
     {
+        int *temp = (int*)malloc((sensor_conf.readings)*sizeof(int));
+        float *ph = (float*)malloc((sensor_conf.readings)*sizeof(float));
+
+        get_saved_readings(temp, ph);
+
+        sensors_init();
+
+        sensors_read(&temp[sensor_conf.current_readings], &ph[sensor_conf.current_readings]);
+
+        set_saved_readings(temp, ph, sensor_conf.readings);
+
+        printf("Temp: %d\n", temp[0]);
+        printf("Temp: %d\n", temp[1]);
+        printf("Temp: %d\n", temp[2]);
+        printf("Temp: %d\n", temp[3]);
+        printf("pH: %f\n", ph[0]);
+        printf("pH: %f\n", ph[1]);
+        printf("pH: %f\n", ph[2]);
+        printf("pH: %f\n", ph[3]);
+
         
 
-        sensors_read(&sensor_conf.temp[sensor_conf.current_readings], &sensor_conf.ph[sensor_conf.current_readings]);
-
-        if(++sensor_conf.current_readings == sensor_conf.readings)
+        if(++(sensor_conf.current_readings) >= sensor_conf.readings)
         {
+            mqtt_client_init();//Change this
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+
             char log_message[60]; //52 chars I think
             sprintf(log_message, "%x:%x:%x:%x:%x:%x %d %d %.1f %d %.1f %d %.1f %d %.1f", 
                 mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5], 
                 sensor_conf.readings, 
-                sensor_conf.temp[0], sensor_conf.ph[0],
-                sensor_conf.temp[1], sensor_conf.ph[1],
-                sensor_conf.temp[2], sensor_conf.ph[2],
-                sensor_conf.temp[3], sensor_conf.ph[3]);
+                temp[0], ph[0],
+                temp[1], ph[1],
+                temp[2], ph[2],
+                temp[3], ph[3]);
 
             mqtt_send_data(LOG_TOPIC, log_message);
             sensor_conf.current_readings = 0;
         }
+        
     }
 
+    printf("Saved\n");
     printf("%d\n", sensor_conf.current_readings);
     printf("%d\n", sensor_conf.current_wb_readings);
+    printf("%d\n", sensor_conf.readings);
+    printf("%d\n", sensor_conf.wb_reading);
 
     set_saved_config(&sensor_conf);
 

@@ -101,8 +101,8 @@ esp_err_t set_saved_config(struct sensor_config* sensor)
     err = open_nvs("saved_params", &my_handle);
 
     if (err != ESP_OK) return err;
-
-    size_t required_size = sizeof(sensor);
+    
+    size_t required_size = sizeof(struct sensor_config);
 
     err = nvs_set_blob(my_handle, "saved_config", sensor, required_size);
 
@@ -141,6 +141,79 @@ esp_err_t get_saved_config(struct sensor_config* sensor)
     } else {
 
         err = nvs_get_blob(my_handle, "saved_config", sensor, &required_size);
+
+        if (err != ESP_OK) {
+            return err;
+        }
+
+        return err;
+    }
+}
+
+esp_err_t set_saved_readings(int* temp, float* ph, int size) 
+{
+    esp_err_t err = nvs_init();
+    if (err != ESP_OK) return err;
+
+    nvs_handle_t my_handle;
+    err = open_nvs("saved_params", &my_handle);
+
+    if (err != ESP_OK) return err;
+    
+    size_t required_size_temp = sizeof(int)*size;
+    size_t required_size_ph = sizeof(float)*size;
+
+    err = nvs_set_blob(my_handle, "saved_temp", temp, required_size_temp);
+
+    if (err != ESP_OK) return err;
+
+    err = nvs_set_blob(my_handle, "saved_ph", ph, required_size_ph);
+
+    if (err != ESP_OK) return err;
+
+    // Commit
+    err = nvs_commit(my_handle);
+    if (err != ESP_OK) return err;
+
+    // Close
+    nvs_close(my_handle);
+    return err;
+}
+
+esp_err_t get_saved_readings(int* temp, float* ph) 
+{
+    esp_err_t err = nvs_init();
+
+    if (err != ESP_OK) return err;
+
+    nvs_handle_t my_handle;
+    err = open_nvs("saved_params", &my_handle);
+
+    if (err != ESP_OK) return err;
+
+
+    size_t required_size_temp, required_size_ph = 0;  // value will default to 0, if not set yet in NVS
+    err = nvs_get_blob(my_handle, "saved_temp", NULL, &required_size_temp);
+
+    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) return err;
+
+    err = nvs_get_blob(my_handle, "saved_ph", NULL, &required_size_ph);
+
+    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) return err;
+
+
+    if (required_size_temp == 0 || required_size_ph == 0) {
+        ESP_LOGE(TAG, "There is no saved configuration!");
+        return err;
+    } else {
+
+        err = nvs_get_blob(my_handle, "saved_temp", temp, &required_size_temp);
+
+        if (err != ESP_OK) {
+            return err;
+        }
+
+        err = nvs_get_blob(my_handle, "saved_ph", ph, &required_size_ph);
 
         if (err != ESP_OK) {
             return err;

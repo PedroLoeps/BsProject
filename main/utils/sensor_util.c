@@ -10,8 +10,6 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "driver/gpio.h"
 
-#include "mqtt_util.h"
-
 const static char *TAG = "SENSOR";
 
 #define PH_SENSOR_CHANNEL           ADC_CHANNEL_1
@@ -91,12 +89,12 @@ void sensors_init(void)
     cali_done = sensors_calibration_init(ADC_UNIT_1, ADC_ATTEN_DB_11, &sensor_cali_handle);
 }
 
-float voltage_to_ph(int voltage)
+static float voltage_to_ph(int voltage)
 {
-    return ((voltage*14)/3300);
+    return (((float)voltage*14)/3300);
 }
 
-int voltage_to_temp(int voltage)
+static int voltage_to_temp(int voltage)
 {
     return ((voltage*60)/3300);
 }
@@ -112,9 +110,12 @@ void sensors_read(int* temp, float* ph)
         ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, PH_SENSOR_CHANNEL, voltage[0]);
         ESP_ERROR_CHECK(adc_cali_raw_to_voltage(sensor_cali_handle, sensor_raw[1], &voltage[1]));
         ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, TEMP_SENSOR_CHANNEL, voltage[1]);
+        printf("Test 1\n");
 
         *ph = voltage_to_ph(voltage[0]);
+        printf("Test 2\n");
         *temp = voltage_to_temp(voltage[1]);
+        printf("Test 3\n");
     }
 
     //Try not using this
