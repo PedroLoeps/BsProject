@@ -6,5 +6,6 @@ idf_component_register(SRCS
                             "utils/nvs_util.c"
                             "utils/mqtt_util.c"
                             "utils/sensor_util.c"
+                            "utils/dht11.c"
 
                     INCLUDE_DIRS "utils")

@@ -1,6 +1,7 @@
 #pragma once
 
-
 void sensors_init(void);
-void sensors_read(int* temp, float* ph);
-bool hum_sensor_read();
+int infiltration_read(void);
+float ph_sensor_read(int* code, int*volt);
+void hum_temp_sensor_read(int* temp, int* hum);
+bool water_level_read(void);

@@ -50,6 +50,8 @@ void app_main(void)
     initialise_wifi();
     vTaskDelay(10000 / portTICK_PERIOD_MS);
 
+    mqtt_client_init();
+
 
 
     switch(esp_sleep_get_wakeup_cause()) 
@@ -65,10 +67,10 @@ void app_main(void)
             bool humidity_detected = hum_sensor_read();
             if(humidity_detected)
             {
-                mqtt_client_init();//Change this
+                //mqtt_client_init();//Change this
                 printf("Humidity Detected\n");
                 char alarm_message[20];
-                sprintf(alarm_message, "%x:%x:%x:%x:%x:%x 0",
+                sprintf(alarm_message, "%x:%x:%x:%x:%x:%x 1",
                     mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
                 mqtt_send_data(ALARM_TOPIC, alarm_message);
             }
@@ -132,7 +134,7 @@ void app_main(void)
 
         if(++(sensor_conf.current_readings) >= sensor_conf.readings)
         {
-            mqtt_client_init();//Change this
+            //mqtt_client_init();//Change this
             vTaskDelay(1000 / portTICK_PERIOD_MS);
 
             char log_message[60]; //52 chars I think

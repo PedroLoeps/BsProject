@@ -10,12 +10,16 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "driver/gpio.h"
 
-const static char *TAG = "SENSOR";
+#include "dht11.h"
 
-#define PH_SENSOR_CHANNEL           ADC_CHANNEL_1
-#define TEMP_SENSOR_CHANNEL         ADC_CHANNEL_3
-#define PULLUP_GPIO                 GPIO_NUM_5
-#define HUMIDITY_SENSOR_GPIO        GPIO_NUM_6
+const static char *TAG = "SENSORS";
+
+#define PH_SENSOR_CHANNEL               ADC_CHANNEL_1
+#define INFILTRATION_SENSOR_CHANNEL     ADC_CHANNEL_3
+#define INFILTRATION_GPIO               GPIO_NUM_5
+#define HUM_TEMP_SENSOR_GPIO            GPIO_NUM_6 
+#define POWER_GPIO                      GPIO_NUM_7
+#define WATER_LEVEL_GPIO                GPIO_NUM_8 
 
 
 static int sensor_raw[2];
@@ -82,59 +86,82 @@ void sensors_init(void)
         .atten = ADC_ATTEN_DB_11,
     };
     ESP_ERROR_CHECK(adc_oneshot_config_channel(sensor_handle, PH_SENSOR_CHANNEL, &config));
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(sensor_handle, TEMP_SENSOR_CHANNEL, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(sensor_handle, INFILTRATION_SENSOR_CHANNEL, &config));
 
     //-------------ADC1 Calibration Init---------------//
     sensor_cali_handle = NULL;
     cali_done = sensors_calibration_init(ADC_UNIT_1, ADC_ATTEN_DB_11, &sensor_cali_handle);
+
+    gpio_set_direction(POWER_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(POWER_GPIO, 1);
 }
 
-static float voltage_to_ph(int voltage)
+int infiltration_read(void)
 {
-    return (((float)voltage*14)/3300);
-}
+    voltage[1] = 0;
 
-static int voltage_to_temp(int voltage)
-{
-    return ((voltage*60)/3300);
-}
+    gpio_set_direction(INFILTRATION_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(INFILTRATION_GPIO, 1);
 
-void sensors_read(int* temp, float* ph)
-{
-    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, PH_SENSOR_CHANNEL, &sensor_raw[0]));
-    ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, PH_SENSOR_CHANNEL, sensor_raw[0]);
-    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, TEMP_SENSOR_CHANNEL, &sensor_raw[1]));
-    ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, TEMP_SENSOR_CHANNEL, sensor_raw[1]);
+    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, INFILTRATION_SENSOR_CHANNEL, &sensor_raw[1]));
+    ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, INFILTRATION_SENSOR_CHANNEL, sensor_raw[1]);
+
     if (cali_done) {
-        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(sensor_cali_handle, sensor_raw[0], &voltage[0]));
-        ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, PH_SENSOR_CHANNEL, voltage[0]);
         ESP_ERROR_CHECK(adc_cali_raw_to_voltage(sensor_cali_handle, sensor_raw[1], &voltage[1]));
-        ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, TEMP_SENSOR_CHANNEL, voltage[1]);
-        printf("Test 1\n");
-
-        *ph = voltage_to_ph(voltage[0]);
-        printf("Test 2\n");
-        *temp = voltage_to_temp(voltage[1]);
-        printf("Test 3\n");
+        ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, INFILTRATION_SENSOR_CHANNEL, voltage[1]);
     }
 
-    //Try not using this
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    gpio_set_level(INFILTRATION_GPIO, 0);
+
+    return ((voltage[1]*100)/3300);
+}
+
+float ph_sensor_read(int* code, int*volt)
+{
+    float ph=0;
+
+    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, PH_SENSOR_CHANNEL, &sensor_raw[0]));
+    //ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, PH_SENSOR_CHANNEL, sensor_raw[0]);
+    
+    if (cali_done) {
+        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(sensor_cali_handle, sensor_raw[0], &voltage[0]));
+        //ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, PH_SENSOR_CHANNEL, voltage[0]);
+        
+        float m = (8.8 - 4.01) / (1315 - 1805);
+        ph = 7 - (1500 - voltage[0]) * m;
+    }
+
+    *code = sensor_raw[0];
+    *volt = voltage[0];
+
+    return ph;
+}
+
+void hum_temp_sensor_read(int* temp, int* hum)
+{
+    //gpio_set_direction(HUM_TEMP_SENSOR_GPIO, GPIO_MODE_INPUT_OUTPUT);
+    gpio_set_pull_mode(HUM_TEMP_SENSOR_GPIO, GPIO_PULLUP_ONLY);
+
+    DHT11_init(HUM_TEMP_SENSOR_GPIO);
+
+    *temp = DHT11_read().temperature;
+    *hum = DHT11_read().humidity;
+
+    gpio_set_pull_mode(HUM_TEMP_SENSOR_GPIO, GPIO_FLOATING);
 
 }
 
-bool hum_sensor_read()
+bool water_level_read(void)
 {
-    //Pode ser usar gpio_isolate em vez de ter um GPIO para o pullup?
+    bool detected;
 
-    gpio_set_direction(PULLUP_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_direction(HUMIDITY_SENSOR_GPIO, GPIO_MODE_INPUT);
-
-    gpio_set_level(PULLUP_GPIO, 1);
-
-    bool detected = gpio_get_level(HUMIDITY_SENSOR_GPIO) ? false : true;
-
-    gpio_set_level(PULLUP_GPIO, 0);
+    gpio_set_direction(WATER_LEVEL_GPIO, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(WATER_LEVEL_GPIO, GPIO_PULLUP_ONLY);
+    
+    if(gpio_get_level(WATER_LEVEL_GPIO)) detected = true;
+    else detected = false;
+    
+    gpio_set_pull_mode(WATER_LEVEL_GPIO, GPIO_FLOATING);
 
     return detected;
 }
