@@ -11,6 +11,11 @@
  * @param event_data The data for the event, esp_mqtt_event_handle_t.
  */
 
+//Initiate MQTT client
 void mqtt_client_init(void);
 
+//Send data to specified topic
 void mqtt_send_data(const char * topic, const char * data);
+
+//Check if any error ocurred when initiating the client or sending data
+int check_mqtt(void);

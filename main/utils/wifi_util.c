@@ -99,28 +99,6 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base,
         wifi_inf.sta_ssid_len = 0;
         xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
         break;
-    /*case WIFI_EVENT_AP_START:
-        esp_wifi_get_mode(&mode);*/
-
-        /* TODO: get config or information of softap, then set to report extra_info */
-        /*if (wifi_inf.ble_is_connected == true) {
-            if (wifi_inf.sta_connected) {
-                esp_blufi_extra_info_t info;
-                memset(&info, 0, sizeof(esp_blufi_extra_info_t));
-                memcpy(info.sta_bssid, wifi_inf.sta_bssid, 6);
-                info.sta_bssid_set = true;
-                info.sta_ssid = wifi_inf.sta_ssid;
-                info.sta_ssid_len = wifi_inf.sta_ssid_len;
-                esp_blufi_send_wifi_conn_report(mode, wifi_inf.sta_got_ip ? ESP_BLUFI_STA_CONN_SUCCESS : ESP_BLUFI_STA_NO_IP, softap_get_current_connection_number(), &info);
-            } else if (wifi_inf.sta_is_connecting) {
-                esp_blufi_send_wifi_conn_report(mode, ESP_BLUFI_STA_CONNECTING, softap_get_current_connection_number(), &wifi_inf.sta_conn_info);
-            } else {
-                esp_blufi_send_wifi_conn_report(mode, ESP_BLUFI_STA_CONN_FAIL, softap_get_current_connection_number(), &wifi_inf.sta_conn_info);
-            }
-        } else {
-            BLUFI_INFO("BLUFI BLE is not connected yet\n");
-        }
-        break;*/
     case WIFI_EVENT_SCAN_DONE: {
         uint16_t apCount = 0;
         esp_wifi_scan_get_ap_num(&apCount);
@@ -158,18 +136,7 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base,
         free(ap_list);
         free(blufi_ap_list);
         break;
-    }/*
-    case WIFI_EVENT_AP_STACONNECTED: {
-        wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
-        BLUFI_INFO("station "MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
-        break;
     }
-    case WIFI_EVENT_AP_STADISCONNECTED: {
-        wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
-        BLUFI_INFO("station "MACSTR" leave, AID=%d", MAC2STR(event->mac), event->aid);
-        break;
-    }*/
-
     default:
         break;
     }
@@ -206,6 +173,9 @@ bool wifi_reconnect(void)
         record_wifi_conn_info(INVALID_RSSI, INVALID_REASON);
         err = true;
     } else {
+        wifi_mode_t mode;
+        esp_wifi_get_mode(&mode);
+        esp_blufi_send_wifi_conn_report(mode, ESP_BLUFI_STA_CONN_FAIL, softap_get_current_connection_number(), &wifi_inf.sta_conn_info);
         err = false;
     }
     return err;

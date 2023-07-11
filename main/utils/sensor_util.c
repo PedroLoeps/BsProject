@@ -14,12 +14,18 @@
 
 const static char *TAG = "SENSORS";
 
-#define PH_SENSOR_CHANNEL               ADC_CHANNEL_1
+#define PH_SENSOR_ENTRY_CHANNEL         ADC_CHANNEL_1
+#define PH_SENSOR_EXIT_CHANNEL          ADC_CHANNEL_9
+
+#define BATTERY_CHANNEL                 ADC_CHANNEL_8
+#define BATTERY_POWER                   GPIO_NUM_3
+
+#define HT_SENSOR_POWER_GPIO            GPIO_NUM_6
+#define HUM_TEMP_SENSOR_GPIO            GPIO_NUM_5
+
 #define INFILTRATION_SENSOR_CHANNEL     ADC_CHANNEL_3
-#define INFILTRATION_GPIO               GPIO_NUM_5
-#define HUM_TEMP_SENSOR_GPIO            GPIO_NUM_6 
-#define POWER_GPIO                      GPIO_NUM_7
-#define WATER_LEVEL_GPIO                GPIO_NUM_8 
+
+#define WATER_LEVEL_GPIO                GPIO_NUM_7
 
 
 static int sensor_raw[2];
@@ -62,12 +68,6 @@ static bool sensors_calibration_init(adc_unit_t unit, adc_atten_t atten, adc_cal
     return calibrated;
 }
 
-/*static void sensor_calibration_deinit(adc_cali_handle_t handle)
-{
-    ESP_LOGI(TAG, "deregister %s calibration scheme", "Curve Fitting");
-    ESP_ERROR_CHECK(adc_cali_delete_scheme_curve_fitting(handle));
-}*/
-
 /*---------------------------------------------------------------
         ADC Initiation
 ---------------------------------------------------------------*/
@@ -85,61 +85,50 @@ void sensors_init(void)
         .bitwidth = ADC_BITWIDTH_DEFAULT,
         .atten = ADC_ATTEN_DB_11,
     };
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(sensor_handle, PH_SENSOR_CHANNEL, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(sensor_handle, PH_SENSOR_ENTRY_CHANNEL, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(sensor_handle, PH_SENSOR_EXIT_CHANNEL, &config));
     ESP_ERROR_CHECK(adc_oneshot_config_channel(sensor_handle, INFILTRATION_SENSOR_CHANNEL, &config));
 
     //-------------ADC1 Calibration Init---------------//
     sensor_cali_handle = NULL;
     cali_done = sensors_calibration_init(ADC_UNIT_1, ADC_ATTEN_DB_11, &sensor_cali_handle);
 
-    gpio_set_direction(POWER_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_level(POWER_GPIO, 1);
+
 }
 
-int infiltration_read(void)
+int infiltration_read(void) 
 {
-    voltage[1] = 0;
+    gpio_set_pull_mode(INFILTRATION_SENSOR_CHANNEL, GPIO_PULLUP_ONLY);
 
-    gpio_set_direction(INFILTRATION_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_level(INFILTRATION_GPIO, 1);
-
-    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, INFILTRATION_SENSOR_CHANNEL, &sensor_raw[1]));
-    ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, INFILTRATION_SENSOR_CHANNEL, sensor_raw[1]);
+    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, INFILTRATION_SENSOR_CHANNEL, &sensor_raw[0]));
 
     if (cali_done) {
-        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(sensor_cali_handle, sensor_raw[1], &voltage[1]));
-        ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, INFILTRATION_SENSOR_CHANNEL, voltage[1]);
+        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(sensor_cali_handle, sensor_raw[0], &voltage[0]));
     }
 
-    gpio_set_level(INFILTRATION_GPIO, 0);
-
-    return ((voltage[1]*100)/3300);
+    gpio_set_pull_mode(INFILTRATION_SENSOR_CHANNEL, GPIO_FLOATING);
+    
+    return (voltage[0]);
 }
 
-float ph_sensor_read(int* code, int*volt)
+void ph_sensors_read(float* ph_entry, float* ph_exit)
 {
-    float ph=0;
-
-    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, PH_SENSOR_CHANNEL, &sensor_raw[0]));
-    //ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, PH_SENSOR_CHANNEL, sensor_raw[0]);
+    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, PH_SENSOR_ENTRY_CHANNEL, &sensor_raw[0]));
+    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, PH_SENSOR_EXIT_CHANNEL, &sensor_raw[1]));
     
     if (cali_done) {
         ESP_ERROR_CHECK(adc_cali_raw_to_voltage(sensor_cali_handle, sensor_raw[0], &voltage[0]));
-        //ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, PH_SENSOR_CHANNEL, voltage[0]);
-        
+        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(sensor_cali_handle, sensor_raw[1], &voltage[1]));
+      
         float m = (8.8 - 4.01) / (1315 - 1805);
-        ph = 7 - (1500 - voltage[0]) * m;
+        *ph_entry = 7 - (1500 - voltage[0]) * m;
+        *ph_entry = 7 - (1500 - voltage[1]) * m;
     }
-
-    *code = sensor_raw[0];
-    *volt = voltage[0];
-
-    return ph;
 }
 
 void hum_temp_sensor_read(int* temp, int* hum)
 {
-    //gpio_set_direction(HUM_TEMP_SENSOR_GPIO, GPIO_MODE_INPUT_OUTPUT);
+    gpio_set_direction(HUM_TEMP_SENSOR_GPIO, GPIO_MODE_INPUT_OUTPUT);
     gpio_set_pull_mode(HUM_TEMP_SENSOR_GPIO, GPIO_PULLUP_ONLY);
 
     DHT11_init(HUM_TEMP_SENSOR_GPIO);
@@ -158,10 +147,26 @@ bool water_level_read(void)
     gpio_set_direction(WATER_LEVEL_GPIO, GPIO_MODE_INPUT);
     gpio_set_pull_mode(WATER_LEVEL_GPIO, GPIO_PULLUP_ONLY);
     
-    if(gpio_get_level(WATER_LEVEL_GPIO)) detected = true;
-    else detected = false;
+    if(gpio_get_level(WATER_LEVEL_GPIO)) detected = false;
+    else detected = true;
     
     gpio_set_pull_mode(WATER_LEVEL_GPIO, GPIO_FLOATING);
 
     return detected;
+}
+
+int battery_read(void)
+{
+    gpio_set_direction(BATTERY_POWER, GPIO_MODE_OUTPUT);
+    gpio_set_level(BATTERY_POWER, 1);
+
+    ESP_ERROR_CHECK(adc_oneshot_read(sensor_handle, BATTERY_CHANNEL, &sensor_raw[0]));
+    
+    if (cali_done) {
+        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(sensor_cali_handle, sensor_raw[0], &voltage[0]));
+    }
+
+    gpio_set_level(BATTERY_POWER, 0);
+
+    return voltage[0];
 }

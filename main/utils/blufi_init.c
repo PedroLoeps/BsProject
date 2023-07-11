@@ -21,13 +21,15 @@
 #include "wifi_util.h"
 #include "nvs_util.h"
 
-#define WIFI_LIST_NUM   10 //Is this used anywhere?
-
 struct wifi_info wifi_inf;
 
 extern wifi_config_t wifi_config;
 
-bool config_done;
+//Variable responsible for telling if the Bluetooth configuration is complete
+static bool config_done;
+
+//Number of readingd and wake ups before reading receive via Bluetooth
+static int reads, wb_reads;
 
 static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_t *param);
 
@@ -72,6 +74,12 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
         */
         esp_wifi_disconnect();
         wifi_connect();
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        if(wifi_inf.sta_connected == false)
+        {
+            printf("WiFi SSID or password incorrect");
+        }
+        else config_done = true;
         break;
     case ESP_BLUFI_EVENT_REQ_DISCONNECT_FROM_AP:
         BLUFI_INFO("BLUFI requset wifi disconnect from AP\n");
@@ -108,7 +116,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
         esp_blufi_disconnect();
         break;
     case ESP_BLUFI_EVENT_DEAUTHENTICATE_STA:
-        /* TODO */
+        /* Not handle currently */
         break;
 	case ESP_BLUFI_EVENT_RECV_STA_BSSID:
         memcpy(wifi_config.sta.bssid, param->sta_bssid.bssid, 6);
@@ -127,8 +135,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
         wifi_config.sta.password[param->sta_passwd.passwd_len] = '\0';
         esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
         BLUFI_INFO("Recv STA PASSWORD %s\n", wifi_config.sta.password);
-        config_done = true;//find better way to do this
-        set_saved_wifi(&wifi_config);//find better place to do this
+        set_saved_wifi(&wifi_config);
         break;
     case ESP_BLUFI_EVENT_GET_WIFI_LIST:{
         
@@ -141,6 +148,9 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
     case ESP_BLUFI_EVENT_RECV_CUSTOM_DATA:
         BLUFI_INFO("Recv Custom Data %" PRIu32 "\n", param->custom_data.data_len);
         esp_log_buffer_hex("Custom Data", param->custom_data.data, param->custom_data.data_len);
+        
+        wb_reads=param->custom_data.data[0] - '0';
+        reads=param->custom_data.data[1] - '0';
         break;
 	case ESP_BLUFI_EVENT_RECV_USERNAME:
         /* Not handle currently */
@@ -196,13 +206,13 @@ esp_err_t esp_blufi_host_init(void)
     err = esp_bt_controller_init(&bt_cfg);
     if (err != ESP_OK) {
         BLUFI_ERROR("%s initialize bt controller failed: %s\n", __func__, esp_err_to_name(err));
-        return ESP_FAIL; //Should we create a different fail macro? --
+        return ESP_FAIL;
     }
 
     err = esp_bt_controller_enable(ESP_BT_MODE_BLE) != ESP_OK;
     if (err != ESP_OK) {
         BLUFI_ERROR("%s enable bt controller failed: %s\n", __func__, esp_err_to_name(err));
-        return ESP_FAIL; //--
+        return ESP_FAIL; 
     }
     
     err = esp_nimble_init();
@@ -285,6 +295,9 @@ esp_err_t esp_blufi_host_and_cb_init(void)
 {
 
     config_done = false;
+    wb_reads = 0;
+    reads = 0;
+
     esp_err_t err = ESP_OK;
 
     err = esp_blufi_register_callbacks(&blufi_callbacks);
@@ -308,4 +321,15 @@ esp_err_t esp_blufi_host_and_cb_init(void)
     }
 
     return err;
+}
+
+int get_sensor_config(int *wbr, int *r)
+{
+    if(config_done==false) return 0;
+    else if(wb_reads != 0 && reads != 0)
+    {
+        *wbr = wb_reads;
+        *r = reads;
+    }
+    return 1;
 }

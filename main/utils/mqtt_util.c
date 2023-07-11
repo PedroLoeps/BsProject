@@ -23,6 +23,8 @@
 
 static const char *TAG = "MQTT";
 
+static int data_send_error;
+
 esp_mqtt_client_handle_t client;
 
 static void log_error_if_nonzero(const char *message, int error_code)
@@ -34,13 +36,11 @@ static void log_error_if_nonzero(const char *message, int error_code)
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
-    //ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=" PRId32, base, event_id);// Can't make this line work
     esp_mqtt_event_handle_t event = event_data;
     client = event->client;
     int msg_id;
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
-        //msg_id = esp_mqtt_client_subscribe(client, "hello", 0);
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
         break;
     case MQTT_EVENT_DISCONNECTED:
@@ -67,8 +67,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             log_error_if_nonzero("reported from tls stack", event->error_handle->esp_tls_stack_err);
             log_error_if_nonzero("captured as transport's socket errno",  event->error_handle->esp_transport_sock_errno);
             ESP_LOGI(TAG, "Last errno string (%s)", strerror(event->error_handle->esp_transport_sock_errno));
-
+            data_send_error = 1;
         }
+
         break;
     default:
         ESP_LOGI(TAG, "Other event id:%d", event->event_id);
@@ -85,9 +86,16 @@ void mqtt_client_init(void)
     client = esp_mqtt_client_init(&mqtt_cfg);
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
+
+    data_send_error = 0;
 }
 
 void mqtt_send_data(const char * topic, const char * data)
 {
     esp_mqtt_client_publish(client, topic, data, 0, 1, 0);
+}
+
+int check_mqtt(void)
+{
+    return data_send_error;
 }
